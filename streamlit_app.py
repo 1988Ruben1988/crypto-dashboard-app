@@ -64,25 +64,31 @@ st.dataframe(df.drop(columns=["ID"]), use_container_width=True)
 # -- GRAFIEK
 st.subheader("📈 Coin Grafiek (laatste 24u, per uur)")
 selected = st.selectbox("Kies coin", df["Coin"].tolist())
-selected_id = df[df["Coin"] == selected]["ID"].values[0]
 huidige_prijs = df[df["Coin"] == selected]["Prijs (EUR)"].values[0]
 
-try:
-    chart_url = f"https://api.coingecko.com/api/v3/coins/{selected_id}/market_chart"
-    chart_params = {"vs_currency": "eur", "days": "1", "interval": "hourly"}
-    chart_response = requests.get(chart_url, params=chart_params)
-    chart_data = chart_response.json()
-    prices = chart_data.get("prices", [])
-    if prices:
-        timestamps = [datetime.fromtimestamp(p[0]/1000) for p in prices]
-        values = [p[1] for p in prices]
-        fig = go.Figure(data=go.Scatter(x=timestamps, y=values, mode='lines', name=selected))
-        fig.update_layout(margin=dict(l=20, r=20, t=30, b=20), height=400)
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.warning("Geen grafiekgegevens beschikbaar voor deze coin.")
-except Exception as e:
-    st.error(f"Fout bij laden van grafiekgegevens: {e}")
+# Haal de juiste CoinGecko ID op, veilig
+selected_row = df[df["Coin"] == selected]
+selected_id = selected_row["ID"].values[0] if not selected_row.empty else None
+
+if selected_id:
+    try:
+        chart_url = f"https://api.coingecko.com/api/v3/coins/{selected_id}/market_chart"
+        chart_params = {"vs_currency": "eur", "days": "1", "interval": "hourly"}
+        chart_response = requests.get(chart_url, params=chart_params)
+        chart_data = chart_response.json()
+        prices = chart_data.get("prices", [])
+        if prices:
+            timestamps = [datetime.fromtimestamp(p[0]/1000) for p in prices]
+            values = [p[1] for p in prices]
+            fig = go.Figure(data=go.Scatter(x=timestamps, y=values, mode='lines', name=selected))
+            fig.update_layout(margin=dict(l=20, r=20, t=30, b=20), height=400)
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.warning("Geen grafiekgegevens beschikbaar voor deze coin.")
+    except Exception as e:
+        st.error(f"Fout bij laden van grafiekgegevens: {e}")
+else:
+    st.warning("Geen geldige CoinGecko ID gevonden voor deze coin.")
 
 # -- HANDELSPANEEL
 st.subheader("🧾 Handmatige Trade Logboek")
