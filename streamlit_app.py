@@ -13,11 +13,18 @@ LOG_PATH = "logboek.csv"
 
 @st.cache_data(ttl=60)
 def get_data():
-    url = "https://api.binance.com/api/v3/ticker/24hr"
+    url = "https://api.coingecko.com/api/v3/coins/markets"
+    params = {
+        "vs_currency": "usd",
+        "order": "volume_desc",
+        "per_page": 50,
+        "page": 1,
+        "sparkline": "false"
+    }
     try:
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, params=params, timeout=10)
         if response.status_code != 200:
-            st.error(f"Binance API fout ({response.status_code}): {response.text}")
+            st.error(f"CoinGecko API fout ({response.status_code}): {response.text}")
             return pd.DataFrame()
         data = response.json()
     except Exception as e:
@@ -26,35 +33,18 @@ def get_data():
 
     top = []
     for d in data:
-        if not isinstance(d, dict):
+        try:
+            top.append({
+                "Coin": d.get("symbol", "").upper(),
+                "Prijs": d.get("current_price", 0),
+                "%": d.get("price_change_percentage_24h", 0),
+                "Vol": d.get("total_volume", 0)
+            })
+        except Exception as e:
+            st.warning(f"Fout bij verwerken van data voor {d.get('id', '?')}: {e}")
             continue
-        symbol = d.get("symbol", "")
-        if symbol.endswith("USDT") and not any(x in symbol for x in ["UP", "DOWN", "BULL", "BEAR"]):
-            try:
-                percent = float(d.get('priceChangePercent', 0))
-                prijs = float(d.get('lastPrice', 0))
-                volume = float(d.get('quoteVolume', 0))
-                top.append({
-                    "Coin": symbol,
-                    "Prijs": prijs,
-                    "%": percent,
-                    "Vol": volume
-                })
-            except Exception as e:
-                st.warning(f"Fout bij verwerken van data voor {symbol}: {e}")
-                continue
-
-    if not top:
-        st.warning("Geen geschikte USDT-paren gevonden in API data.")
-        return pd.DataFrame()
 
     df = pd.DataFrame(top)
-    if "Vol" in df.columns:
-        df = df.sort_values(by="Vol", ascending=False).head(50)
-    else:
-        st.warning("Volume kolom ontbreekt in de data.")
-        return pd.DataFrame()
-
     df["Signaal"] = df["%"].apply(lambda x: "BUY" if x > 2 else ("SELL" if x < -2 else "NONE"))
     df = df.sort_values(by="Signaal", ascending=False)
     return df
@@ -69,38 +59,14 @@ if df.empty:
 st.subheader("🔎 Analyse & Signalen")
 st.dataframe(df, use_container_width=True)
 
-# -- GRAFIEK
-st.subheader("📈 Coin Grafiek (laatste 60 min)")
-coins = df["Coin"].tolist()
-selected = st.selectbox("Kies coin", coins)
-
-@st.cache_data(ttl=60)
-def load_klines(symbol):
-    url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval=1m&limit=60"
-    try:
-        data = requests.get(url).json()
-        if not isinstance(data, list):
-            return pd.DataFrame()
-        ohlc = pd.DataFrame(data, columns=["tijd", "open", "high", "low", "close", "volume", "x", "y", "z", "a", "b", "c"])
-        ohlc["tijd"] = pd.to_datetime(ohlc["tijd"], unit="ms")
-        ohlc["close"] = ohlc["close"].astype(float)
-        return ohlc[["tijd", "close"]]
-    except Exception as e:
-        st.warning(f"Fout bij laden van grafiekdata: {e}")
-        return pd.DataFrame()
-
-chart_data = load_klines(selected)
-if chart_data.empty:
-    st.warning("Grafiekdata niet beschikbaar.")
-else:
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=chart_data["tijd"], y=chart_data["close"], mode="lines", name=selected))
-    fig.update_layout(margin=dict(l=20, r=20, t=30, b=20), height=400)
-    st.plotly_chart(fig, use_container_width=True)
+# -- GRAFIEK (niet beschikbaar met CoinGecko per minuut)
+st.subheader("📈 Coin Grafiek")
+st.info("Grafiekweergave per minuut is alleen mogelijk met Binance of premium APIs.")
 
 # -- HANDELSPANEEL
 st.subheader("🧾 Handmatige Trade Logboek")
 hoeveelheid = st.number_input("Hoeveelheid (virtueel)", min_value=0.0, step=0.1, value=0.0, format="%f")
+selected = st.selectbox("Kies coin", df["Coin"].tolist())
 
 col1, col2, col3 = st.columns(3)
 
@@ -119,7 +85,7 @@ with col2:
             st.success(f"Verkoop geregistreerd: {selected} - {hoeveelheid}")
 
 with col3:
-    if st.button("🩹 Wis logboek"):
+    if st.button("🧹 Wis logboek"):
         open(LOG_PATH, "w").close()
         st.success("Logboek gewist.")
 
