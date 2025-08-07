@@ -67,10 +67,7 @@ st.dataframe(df.drop(columns=["ID"]), use_container_width=True)
 st.subheader("📈 Coin Grafiek (laatste 24u, per uur)")
 selected = st.selectbox("Kies coin", df["Coin"].tolist())
 huidige_prijs = df[df["Coin"] == selected]["Prijs (EUR)"].values[0]
-
-# Haal de juiste CoinGecko ID op, veilig
-selected_row = df[df["Coin"] == selected]
-selected_id = selected_row["ID"].values[0] if not selected_row.empty else None
+selected_id = df[df["Coin"] == selected]["ID"].values[0]
 
 if selected_id:
     try:
@@ -94,23 +91,23 @@ else:
 
 # -- HANDELSPANEEL
 st.subheader("🧾 Handmatige Trade Logboek")
-hoeveelheid = st.number_input("Hoeveelheid (virtueel)", min_value=0.0, step=0.1, value=0.0, format="%f")
+st.caption("Bij aankopen wordt er automatisch voor €100 gekocht.")
 
 col1, col2, col3 = st.columns(3)
 
 with col1:
     if st.button("💰 Koop (virtueel)"):
-        if hoeveelheid > 0:
-            with open(LOG_PATH, "a") as f:
-                f.write(f"{datetime.now(TZ)},{selected},BUY,{hoeveelheid},{huidige_prijs}\n")
-            st.success(f"Koop geregistreerd: {selected} - {hoeveelheid} aan {huidige_prijs} EUR")
+        aantal = round(100 / huidige_prijs, 6)
+        with open(LOG_PATH, "a") as f:
+            f.write(f"{datetime.now(TZ)},{selected},BUY,{aantal},{huidige_prijs}\n")
+        st.success(f"Koop geregistreerd: {selected} - {aantal} aan {huidige_prijs} EUR")
 
 with col2:
     if st.button("📤 Verkoop (virtueel)"):
-        if hoeveelheid > 0:
-            with open(LOG_PATH, "a") as f:
-                f.write(f"{datetime.now(TZ)},{selected},SELL,{hoeveelheid},{huidige_prijs}\n")
-            st.success(f"Verkoop geregistreerd: {selected} - {hoeveelheid} aan {huidige_prijs} EUR")
+        aantal = round(100 / huidige_prijs, 6)
+        with open(LOG_PATH, "a") as f:
+            f.write(f"{datetime.now(TZ)},{selected},SELL,{aantal},{huidige_prijs}\n")
+        st.success(f"Verkoop geregistreerd: {selected} - {aantal} aan {huidige_prijs} EUR")
 
 with col3:
     if st.button("🧹 Wis logboek"):
@@ -146,3 +143,6 @@ else:
     st.info("Nog geen automatische signalen geregistreerd.")
 
 st.caption(f"Laatste update: {datetime.now(TZ).strftime('%H:%M:%S')}")
+
+# Auto-refresh elke minuut
+st.experimental_rerun()
