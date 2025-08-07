@@ -15,7 +15,7 @@ LOG_PATH = "logboek.csv"
 def get_data():
     url = "https://api.coingecko.com/api/v3/coins/markets"
     params = {
-        "vs_currency": "usd",
+        "vs_currency": "eur",
         "order": "volume_desc",
         "per_page": 50,
         "page": 1,
@@ -36,7 +36,7 @@ def get_data():
         try:
             top.append({
                 "Coin": d.get("symbol", "").upper(),
-                "Prijs": d.get("current_price", 0),
+                "Prijs (EUR)": d.get("current_price", 0),
                 "%": d.get("price_change_percentage_24h", 0),
                 "Vol": d.get("total_volume", 0)
             })
@@ -67,6 +67,7 @@ st.info("Grafiekweergave per minuut is alleen mogelijk met Binance of premium AP
 st.subheader("🧾 Handmatige Trade Logboek")
 hoeveelheid = st.number_input("Hoeveelheid (virtueel)", min_value=0.0, step=0.1, value=0.0, format="%f")
 selected = st.selectbox("Kies coin", df["Coin"].tolist())
+huidige_prijs = df[df["Coin"] == selected]["Prijs (EUR)"].values[0]
 
 col1, col2, col3 = st.columns(3)
 
@@ -74,15 +75,15 @@ with col1:
     if st.button("💰 Koop (virtueel)"):
         if hoeveelheid > 0:
             with open(LOG_PATH, "a") as f:
-                f.write(f"{datetime.now()},{selected},BUY,{hoeveelheid}\n")
-            st.success(f"Koop geregistreerd: {selected} - {hoeveelheid}")
+                f.write(f"{datetime.now()},{selected},BUY,{hoeveelheid},{huidige_prijs}\n")
+            st.success(f"Koop geregistreerd: {selected} - {hoeveelheid} aan {huidige_prijs} EUR")
 
 with col2:
     if st.button("📤 Verkoop (virtueel)"):
         if hoeveelheid > 0:
             with open(LOG_PATH, "a") as f:
-                f.write(f"{datetime.now()},{selected},SELL,{hoeveelheid}\n")
-            st.success(f"Verkoop geregistreerd: {selected} - {hoeveelheid}")
+                f.write(f"{datetime.now()},{selected},SELL,{hoeveelheid},{huidige_prijs}\n")
+            st.success(f"Verkoop geregistreerd: {selected} - {hoeveelheid} aan {huidige_prijs} EUR")
 
 with col3:
     if st.button("🧹 Wis logboek"):
@@ -92,7 +93,7 @@ with col3:
 # -- LOG WEERGAVE
 st.subheader("📜 Logboek")
 if os.path.exists(LOG_PATH):
-    log_df = pd.read_csv(LOG_PATH, names=["Tijd", "Coin", "Actie", "Aantal"])
+    log_df = pd.read_csv(LOG_PATH, names=["Tijd", "Coin", "Actie", "Aantal", "Prijs (EUR)"])
     st.dataframe(log_df[::-1].head(20), use_container_width=True)
 else:
     st.info("Nog geen transacties geregistreerd.")
