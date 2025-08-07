@@ -14,10 +14,9 @@ LOG_PATH = "logboek.csv"
 @st.cache_data(ttl=60)
 def get_data():
     url = "https://api.binance.com/api/v3/ticker/24hr"
-       try:
+    try:
         response = requests.get(url, timeout=10)
         data = response.json()
-        st.write("API response voorbeeld:", data[:2])  # <--- tijdelijk debug
     except:
         st.warning("API niet bereikbaar.")
         return pd.DataFrame()
