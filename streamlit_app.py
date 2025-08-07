@@ -3,76 +3,123 @@ import pandas as pd
 import requests
 import plotly.graph_objs as go
 from datetime import datetime
+import os
 
 st.set_page_config(page_title="Live Crypto Dashboard", layout="wide")
-st.title("📊 Live Crypto Signalen + Grafiek")
-st.caption("Toont realtime BUY-signalen en logboek van virtuele trades (simulatie)")
+st.title("📊 Live Crypto Signal Dashboard")
+st.caption("Toont realtime BUY-signalen, grafiek en handmatige trades.")
+
+LOG_PATH = "logboek.csv"
 
 @st.cache_data(ttl=60)
 def get_data():
     url = "https://api.binance.com/api/v3/ticker/24hr"
     try:
         response = requests.get(url, timeout=10)
-        response.raise_for_status()
         data = response.json()
-        df = pd.DataFrame(data)
-        return df
-    except requests.exceptions.RequestException:
-        st.warning("Binance API is niet bereikbaar.")
-        return None
+    except:
+        st.warning("API niet bereikbaar.")
+        return pd.DataFrame()
 
+    top = []
+    for d in data:
+        if d['symbol'].endswith("USDT") and not any(x in d['symbol'] for x in ["UP", "DOWN", "BULL", "BEAR"]):
+            percent = float(d['priceChangePercent'])
+            top.append({
+                "Coin": d['symbol'],
+                "Prijs": float(d['lastPrice']),
+                "%": percent,
+                "Vol": float(d['quoteVolume'])
+            })
+    df = pd.DataFrame(top)
+    df = df.sort_values(by="Vol", ascending=False).head(50)
+    df["Signaal"] = df["%"].apply(lambda x: "BUY" if x > 2 else ("SELL" if x < -2 else "NONE"))
+    df = df.sort_values(by="Signaal", ascending=False)
+    return df
+
+# -- DATA LADEN
 df = get_data()
-
-if df is None or df.empty:
+if df.empty:
     st.warning("Geen data beschikbaar.")
     st.stop()
 
-# Filter op USDT pairs en top 50 bekende coins
-top_coins = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "ADAUSDT", "DOGEUSDT",
-             "AVAXUSDT", "DOTUSDT", "TRXUSDT", "LINKUSDT", "MATICUSDT", "LTCUSDT", "UNIUSDT",
-             "ATOMUSDT", "BCHUSDT", "XLMUSDT", "FILUSDT", "APTUSDT", "ETCUSDT",
-             "SANDUSDT", "AAVEUSDT", "NEARUSDT", "EGLDUSDT", "ALGOUSDT", "FTMUSDT", "VETUSDT",
-             "ICPUSDT", "RUNEUSDT", "XMRUSDT", "HBARUSDT", "MANAUSDT", "AXSUSDT", "GALAUSDT",
-             "FLOWUSDT", "CHZUSDT", "THETAUSDT", "DYDXUSDT", "ENJUSDT", "ZILUSDT",
-             "CRVUSDT", "1INCHUSDT", "SNXUSDT", "CAKEUSDT", "IMXUSDT", "BELUSDT", "GMTUSDT",
-             "COTIUSDT", "RLCUSDT"]
+# -- TABEL
+st.subheader("🔎 Analyse & Signalen")
+st.dataframe(df, use_container_width=True)
 
-# Filter
-df = df[df['symbol'].isin(top_coins)]
-df['priceChangePercent'] = pd.to_numeric(df['priceChangePercent'], errors='coerce')
-df = df.sort_values(by='priceChangePercent', ascending=False)
+# -- GRAFIEK
+st.subheader("📈 Coin Grafiek (laatste 60 min)")
+coins = df["Coin"].tolist()
+selected = st.selectbox("Kies coin", coins)
 
-# BUY signalen simulatie
-df['Signaal'] = df['priceChangePercent'].apply(lambda x: 'BUY' if x > 3 else ('SELL' if x < -3 else 'NONE'))
-
-st.subheader("📈 Analyse & BUY-signalen")
-st.dataframe(df[['symbol', 'lastPrice', 'priceChangePercent', 'Signaal']], use_container_width=True)
-
-# Toon grafiek voor top coin
-coin = st.selectbox("📌 Bekijk grafiek voor coin:", df['symbol'].unique())
-
-def get_klines(symbol, interval="1m", limit=60):
-    url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit={limit}"
+@st.cache_data(ttl=60)
+def load_klines(symbol):
+    url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval=1m&limit=60"
     try:
-        response = requests.get(url)
-        response.raise_for_status()
-        data = response.json()
-        df = pd.DataFrame(data, columns=["Time", "Open", "High", "Low", "Close", "Volume",
-                                         "Close time", "Quote asset volume", "Number of trades",
-                                         "Taker buy base asset volume", "Taker buy quote asset volume", "Ignore"])
-        df["Time"] = pd.to_datetime(df["Time"], unit='ms')
-        df["Close"] = pd.to_numeric(df["Close"], errors='coerce')
-        return df[["Time", "Close"]]
-    except Exception as e:
-        st.error(f"Fout bij ophalen van koersdata: {e}")
+        data = requests.get(url).json()
+        ohlc = pd.DataFrame(data, columns=["tijd", "open", "high", "low", "close", "volume", "x", "y", "z", "a", "b", "c"])
+        ohlc["tijd"] = pd.to_datetime(ohlc["tijd"], unit="ms")
+        ohlc["close"] = ohlc["close"].astype(float)
+        return ohlc[["tijd", "close"]]
+    except:
         return pd.DataFrame()
 
-chart_df = get_klines(coin)
-if not chart_df.empty:
+chart_data = load_klines(selected)
+if chart_data.empty:
+    st.warning("Grafiekdata niet beschikbaar.")
+else:
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=chart_df['Time'], y=chart_df['Close'], mode='lines', name=coin))
-    fig.update_layout(title=f"Koersverloop - {coin}", xaxis_title="Tijd", yaxis_title="Prijs (USDT)")
+    fig.add_trace(go.Scatter(x=chart_data["tijd"], y=chart_data["close"], mode="lines", name=selected))
+    fig.update_layout(margin=dict(l=20, r=20, t=30, b=20), height=400)
     st.plotly_chart(fig, use_container_width=True)
 
-# Laatste update tijd
+# -- HANDELSPANEEL
+st.subheader("🧾 Handmatige Trade Logboek")
+hoeveelheid = st.number_input("Hoeveelheid (virtueel)", min_value=0.0, step=0.1, value=0.0, format="%f")
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    if st.button("💰 Koop (virtueel)"):
+        if hoeveelheid > 0:
+            with open(LOG_PATH, "a") as f:
+                f.write(f"{datetime.now()},{selected},BUY,{hoeveelheid}\n")
+            st.success(f"Koop geregistreerd: {selected} - {hoeveelheid}")
+
+with col2:
+    if st.button("📤 Verkoop (virtueel)"):
+        if hoeveelheid > 0:
+            with open(LOG_PATH, "a") as f:
+                f.write(f"{datetime.now()},{selected},SELL,{hoeveelheid}\n")
+            st.success(f"Verkoop geregistreerd: {selected} - {hoeveelheid}")
+
+with col3:
+    if st.button("🧹 Wis logboek"):
+        open(LOG_PATH, "w").close()
+        st.success("Logboek gewist.")
+
+# -- LOG WEERGAVE
+st.subheader("📜 Logboek + Winst/Verlies")
+if os.path.exists(LOG_PATH):
+    log_df = pd.read_csv(LOG_PATH, names=["Tijd", "Coin", "Actie", "Aantal"])
+    log_df = log_df.tail(20)
+    log_df["Prijs"] = log_df.apply(lambda row: df[df["Coin"] == row["Coin"]]["Prijs"].values[0] if row["Coin"] in df["Coin"].values else 0, axis=1)
+
+    winst = 0
+    positions = {}
+
+    for _, row in log_df.iterrows():
+        key = row["Coin"]
+        if row["Actie"] == "BUY":
+            positions[key] = positions.get(key, 0) + float(row["Aantal"])
+            winst -= float(row["Aantal"]) * row["Prijs"]
+        elif row["Actie"] == "SELL":
+            positions[key] = positions.get(key, 0) - float(row["Aantal"])
+            winst += float(row["Aantal"]) * row["Prijs"]
+
+    st.dataframe(log_df[::-1], use_container_width=True)
+    st.markdown(f"**📊 Totaal virtueel resultaat:** {'✅' if winst >= 0 else '❌'} {winst:.2f} USD")
+else:
+    st.info("Nog geen transacties geregistreerd.")
+
 st.caption(f"Laatste update: {datetime.now().strftime('%H:%M:%S')}")
