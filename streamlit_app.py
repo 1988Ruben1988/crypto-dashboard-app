@@ -22,15 +22,20 @@ def get_data():
         return pd.DataFrame()
 
     top = []
-    for d in data:
-        if d['symbol'].endswith("USDT") and not any(x in d['symbol'] for x in ["UP", "DOWN", "BULL", "BEAR"]):
-            percent = float(d['priceChangePercent'])
-            top.append({
-                "Coin": d['symbol'],
-                "Prijs": float(d['lastPrice']),
-                "%": percent,
-                "Vol": float(d['quoteVolume'])
-            })
+        for d in data:
+        symbol = d.get("symbol", "")
+        if symbol.endswith("USDT") and not any(x in symbol for x in ["UP", "DOWN", "BULL", "BEAR"]):
+            try:
+                percent = float(d['priceChangePercent'])
+                top.append({
+                    "Coin": symbol,
+                    "Prijs": float(d['lastPrice']),
+                    "%": percent,
+                    "Vol": float(d['quoteVolume'])
+                })
+            except (KeyError, ValueError):
+                continue
+
     df = pd.DataFrame(top)
     df = df.sort_values(by="Vol", ascending=False).head(50)
     df["Signaal"] = df["%"].apply(lambda x: "BUY" if x > 2 else ("SELL" if x < -2 else "NONE"))
