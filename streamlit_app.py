@@ -22,7 +22,7 @@ def get_data():
         return pd.DataFrame()
 
     top = []
-        for d in data:
+    for d in data:
         symbol = d.get("symbol", "")
         if symbol.endswith("USDT") and not any(x in symbol for x in ["UP", "DOWN", "BULL", "BEAR"]):
             try:
@@ -35,6 +35,7 @@ def get_data():
                 })
             except (KeyError, ValueError):
                 continue
+
 
     df = pd.DataFrame(top)
     df = df.sort_values(by="Vol", ascending=False).head(50)
