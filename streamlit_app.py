@@ -5,8 +5,12 @@ import plotly.graph_objs as go
 from datetime import datetime
 import pytz
 import os
+from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="Live Crypto Dashboard", layout="wide")
+# Auto-refresh elke 60 seconden
+st_autorefresh(interval=60 * 1000, key="auto-refresh")
+
 st.title("📊 Live Crypto Signal Dashboard")
 st.caption("Toont realtime BUY-signalen, grafiek en handmatige trades.")
 
@@ -143,6 +147,3 @@ else:
     st.info("Nog geen automatische signalen geregistreerd.")
 
 st.caption(f"Laatste update: {datetime.now(TZ).strftime('%H:%M:%S')}")
-
-# Auto-refresh elke minuut
-st.experimental_rerun()
