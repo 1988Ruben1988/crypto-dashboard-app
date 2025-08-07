@@ -27,15 +27,26 @@ def get_data():
             continue
         symbol = d.get("symbol", "")
         if symbol.endswith("USDT") and not any(x in symbol for x in ["UP", "DOWN", "BULL", "BEAR"]):
-            percent = float(d['priceChangePercent'])
-            top.append({
-                "Coin": symbol,
-                "Prijs": float(d['lastPrice']),
-                "%": percent,
-                "Vol": float(d['quoteVolume'])
-            })
+            try:
+                percent = float(d['priceChangePercent'])
+                top.append({
+                    "Coin": symbol,
+                    "Prijs": float(d['lastPrice']),
+                    "%": percent,
+                    "Vol": float(d['quoteVolume'])
+                })
+            except:
+                continue
+
+    if not top:
+        return pd.DataFrame()
+
     df = pd.DataFrame(top)
-    df = df.sort_values(by="Vol", ascending=False).head(50)
+    if "Vol" in df.columns:
+        df = df.sort_values(by="Vol", ascending=False).head(50)
+    else:
+        return pd.DataFrame()
+
     df["Signaal"] = df["%"].apply(lambda x: "BUY" if x > 2 else ("SELL" if x < -2 else "NONE"))
     df = df.sort_values(by="Signaal", ascending=False)
     return df
@@ -97,7 +108,7 @@ with col2:
             st.success(f"Verkoop geregistreerd: {selected} - {hoeveelheid}")
 
 with col3:
-    if st.button("🧹 Wis logboek"):
+    if st.button("🩹 Wis logboek"):
         open(LOG_PATH, "w").close()
         st.success("Logboek gewist.")
 
@@ -105,7 +116,7 @@ with col3:
 st.subheader("📜 Logboek")
 if os.path.exists(LOG_PATH):
     log_df = pd.read_csv(LOG_PATH, names=["Tijd", "Coin", "Actie", "Aantal"])
-    st.dataframe(log_df[::-1], use_container_width=True)
+    st.dataframe(log_df[::-1].head(20), use_container_width=True)
 else:
     st.info("Nog geen transacties geregistreerd.")
 
