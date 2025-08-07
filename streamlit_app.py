@@ -16,9 +16,12 @@ def get_data():
     url = "https://api.binance.com/api/v3/ticker/24hr"
     try:
         response = requests.get(url, timeout=10)
+        if response.status_code != 200:
+            st.error(f"Binance API fout ({response.status_code}): {response.text}")
+            return pd.DataFrame()
         data = response.json()
-    except:
-        st.warning("API niet bereikbaar.")
+    except Exception as e:
+        st.warning(f"API niet bereikbaar: {e}")
         return pd.DataFrame()
 
     top = []
