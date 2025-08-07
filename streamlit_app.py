@@ -59,6 +59,15 @@ def get_data():
     df = df.sort_values(by="Signaal", ascending=False)
     return df
 
+@st.cache_data(ttl=60)
+def get_chart_data(coin_id):
+    url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart"
+    params = {"vs_currency": "eur", "days": "1", "interval": "hourly"}
+    response = requests.get(url, params=params, timeout=10)
+    if response.status_code != 200:
+        raise Exception(f"CoinGecko fout: {response.status_code} - {response.text}")
+    return response.json()
+
 # -- DATA LADEN
 df = get_data()
 if df.empty:
@@ -77,10 +86,7 @@ selected_id = df[df["Coin"] == selected]["ID"].values[0]
 
 if selected_id:
     try:
-        chart_url = f"https://api.coingecko.com/api/v3/coins/{selected_id}/market_chart"
-        chart_params = {"vs_currency": "eur", "days": "1", "interval": "hourly"}
-        chart_response = requests.get(chart_url, params=chart_params, timeout=10)
-        chart_data = chart_response.json()
+        chart_data = get_chart_data(selected_id)
         prices = chart_data.get("prices", [])
 
         if prices:
