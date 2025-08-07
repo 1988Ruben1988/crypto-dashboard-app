@@ -3,6 +3,7 @@ import pandas as pd
 import requests
 import plotly.graph_objs as go
 from datetime import datetime
+import pytz
 import os
 
 st.set_page_config(page_title="Live Crypto Dashboard", layout="wide")
@@ -11,6 +12,7 @@ st.caption("Toont realtime BUY-signalen, grafiek en handmatige trades.")
 
 LOG_PATH = "logboek.csv"
 AUTO_LOG_PATH = "auto_log.csv"
+TZ = pytz.timezone('Europe/Brussels')
 
 @st.cache_data(ttl=60)
 def get_data():
@@ -78,7 +80,7 @@ if selected_id:
         chart_data = chart_response.json()
         prices = chart_data.get("prices", [])
         if prices:
-            timestamps = [datetime.fromtimestamp(p[0]/1000) for p in prices]
+            timestamps = [datetime.fromtimestamp(p[0]/1000, tz=TZ) for p in prices]
             values = [p[1] for p in prices]
             fig = go.Figure(data=go.Scatter(x=timestamps, y=values, mode='lines', name=selected))
             fig.update_layout(margin=dict(l=20, r=20, t=30, b=20), height=400)
@@ -100,14 +102,14 @@ with col1:
     if st.button("💰 Koop (virtueel)"):
         if hoeveelheid > 0:
             with open(LOG_PATH, "a") as f:
-                f.write(f"{datetime.now()},{selected},BUY,{hoeveelheid},{huidige_prijs}\n")
+                f.write(f"{datetime.now(TZ)},{selected},BUY,{hoeveelheid},{huidige_prijs}\n")
             st.success(f"Koop geregistreerd: {selected} - {hoeveelheid} aan {huidige_prijs} EUR")
 
 with col2:
     if st.button("📤 Verkoop (virtueel)"):
         if hoeveelheid > 0:
             with open(LOG_PATH, "a") as f:
-                f.write(f"{datetime.now()},{selected},SELL,{hoeveelheid},{huidige_prijs}\n")
+                f.write(f"{datetime.now(TZ)},{selected},SELL,{hoeveelheid},{huidige_prijs}\n")
             st.success(f"Verkoop geregistreerd: {selected} - {hoeveelheid} aan {huidige_prijs} EUR")
 
 with col3:
@@ -124,7 +126,7 @@ for _, row in df.iterrows():
             prijs = row["Prijs (EUR)"]
             aantal = round(100 / prijs, 6)
             with open(AUTO_LOG_PATH, "a") as f:
-                f.write(f"{datetime.now()},{coin},{actie},{aantal},{prijs}\n")
+                f.write(f"{datetime.now(TZ)},{coin},{actie},{aantal},{prijs}\n")
         except:
             pass
 
@@ -143,4 +145,4 @@ if os.path.exists(AUTO_LOG_PATH):
 else:
     st.info("Nog geen automatische signalen geregistreerd.")
 
-st.caption(f"Laatste update: {datetime.now().strftime('%H:%M:%S')}")
+st.caption(f"Laatste update: {datetime.now(TZ).strftime('%H:%M:%S')}")
