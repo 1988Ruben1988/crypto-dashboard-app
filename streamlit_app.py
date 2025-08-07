@@ -35,6 +35,7 @@ def get_data():
     for d in data:
         try:
             top.append({
+                "ID": d.get("id", ""),
                 "Coin": d.get("symbol", "").upper(),
                 "Prijs (EUR)": d.get("current_price", 0),
                 "%": d.get("price_change_percentage_24h", 0),
@@ -57,17 +58,34 @@ if df.empty:
 
 # -- TABEL
 st.subheader("🔎 Analyse & Signalen")
-st.dataframe(df, use_container_width=True)
+st.dataframe(df.drop(columns=["ID"]), use_container_width=True)
 
-# -- GRAFIEK (niet beschikbaar met CoinGecko per minuut)
-st.subheader("📈 Coin Grafiek")
-st.info("Grafiekweergave per minuut is alleen mogelijk met Binance of premium APIs.")
+# -- GRAFIEK
+st.subheader("📈 Coin Grafiek (laatste 24u, per uur)")
+selected = st.selectbox("Kies coin", df["Coin"].tolist())
+selected_id = df[df["Coin"] == selected]["ID"].values[0]
+huidige_prijs = df[df["Coin"] == selected]["Prijs (EUR)"].values[0]
+
+try:
+    chart_url = f"https://api.coingecko.com/api/v3/coins/{selected_id}/market_chart"
+    chart_params = {"vs_currency": "eur", "days": "1", "interval": "hourly"}
+    chart_response = requests.get(chart_url, params=chart_params)
+    chart_data = chart_response.json()
+    prices = chart_data.get("prices", [])
+    if prices:
+        timestamps = [datetime.fromtimestamp(p[0]/1000) for p in prices]
+        values = [p[1] for p in prices]
+        fig = go.Figure(data=go.Scatter(x=timestamps, y=values, mode='lines', name=selected))
+        fig.update_layout(margin=dict(l=20, r=20, t=30, b=20), height=400)
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.warning("Geen grafiekgegevens beschikbaar voor deze coin.")
+except Exception as e:
+    st.error(f"Fout bij laden van grafiekgegevens: {e}")
 
 # -- HANDELSPANEEL
 st.subheader("🧾 Handmatige Trade Logboek")
 hoeveelheid = st.number_input("Hoeveelheid (virtueel)", min_value=0.0, step=0.1, value=0.0, format="%f")
-selected = st.selectbox("Kies coin", df["Coin"].tolist())
-huidige_prijs = df[df["Coin"] == selected]["Prijs (EUR)"].values[0]
 
 col1, col2, col3 = st.columns(3)
 
