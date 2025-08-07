@@ -10,6 +10,7 @@ st.title("📊 Live Crypto Signal Dashboard")
 st.caption("Toont realtime BUY-signalen, grafiek en handmatige trades.")
 
 LOG_PATH = "logboek.csv"
+AUTO_LOG_PATH = "auto_log.csv"
 
 @st.cache_data(ttl=60)
 def get_data():
@@ -108,12 +109,32 @@ with col3:
         open(LOG_PATH, "w").close()
         st.success("Logboek gewist.")
 
+# -- AUTOMATISCHE KOOP/VERKOOP VANAF SIGNALEN
+for _, row in df.iterrows():
+    if row["Signaal"] in ["BUY", "SELL"]:
+        try:
+            actie = row["Signaal"]
+            coin = row["Coin"]
+            prijs = row["Prijs (EUR)"]
+            aantal = round(100 / prijs, 6)
+            with open(AUTO_LOG_PATH, "a") as f:
+                f.write(f"{datetime.now()},{coin},{actie},{aantal},{prijs}\n")
+        except:
+            pass
+
 # -- LOG WEERGAVE
 st.subheader("📜 Logboek")
 if os.path.exists(LOG_PATH):
     log_df = pd.read_csv(LOG_PATH, names=["Tijd", "Coin", "Actie", "Aantal", "Prijs (EUR)"])
     st.dataframe(log_df[::-1].head(20), use_container_width=True)
 else:
-    st.info("Nog geen transacties geregistreerd.")
+    st.info("Nog geen handmatige transacties geregistreerd.")
+
+st.subheader("⚙️ Automatische Signaal Log")
+if os.path.exists(AUTO_LOG_PATH):
+    auto_log_df = pd.read_csv(AUTO_LOG_PATH, names=["Tijd", "Coin", "Actie", "Aantal", "Prijs (EUR)"])
+    st.dataframe(auto_log_df[::-1].head(20), use_container_width=True)
+else:
+    st.info("Nog geen automatische signalen geregistreerd.")
 
 st.caption(f"Laatste update: {datetime.now().strftime('%H:%M:%S')}")
