@@ -1,49 +1,73 @@
-
 import streamlit as st
-import requests
 import pandas as pd
-import time
-from datetime import datetime
+import requests
 import plotly.graph_objs as go
 
-st.set_page_config(page_title="Live Crypto Signals", layout="wide")
+st.set_page_config(page_title="Live Crypto Dashboard", layout="wide")
+st.title("📈 Live Crypto Signalen + Grafiek")
+st.caption("Toont realtime BUY-signalen en logboek van virtuele trades (simulatie)")
 
 @st.cache_data(ttl=60)
 def get_data():
-    url = "https://api.binance.com/api/v3/ticker/24hr"
-    data = requests.get(url).json()
-    df = pd.DataFrame(data)
-    df = df[df["symbol"].str.endswith("USDT")]
-    df["priceChangePercent"] = df["priceChangePercent"].astype(float)
-    df = df.sort_values("priceChangePercent", ascending=False)
-    return df.head(50)
+    try:
+        url = "https://api.binance.com/api/v3/ticker/24hr"
+        response = requests.get(url)
+        if response.status_code != 200:
+            st.warning("Binance API is niet bereikbaar.")
+            return pd.DataFrame()
 
-@st.cache_data(ttl=60)
-def get_historical(symbol):
-    url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval=1m&limit=30"
-    data = requests.get(url).json()
-    df = pd.DataFrame(data, columns=["Time","Open","High","Low","Close","Volume","CloseTime","QuoteAssetVolume","NumberOfTrades","TakerBuyBase","TakerBuyQuote","Ignore"])
-    df["Time"] = pd.to_datetime(df["Time"], unit="ms")
-    df["Close"] = df["Close"].astype(float)
-    return df[["Time", "Close"]]
+        data = response.json()
 
-st.title("📈 Live Crypto Signalen + Grafiek")
+        # Filter alleen USDT-paren met voldoende volume
+        filtered = [d for d in data if d['symbol'].endswith('USDT') and float(d['quoteVolume']) > 10_000_000]
+
+        df = pd.DataFrame([{
+            'Coin': d['symbol'],
+            'Prijs': float(d['lastPrice']),
+            'Volume': float(d['quoteVolume']),
+            'Change %': float(d['priceChangePercent'])
+        } for d in filtered])
+
+        return df
+
+    except Exception as e:
+        st.error(f"Fout bij ophalen van data: {e}")
+        return pd.DataFrame()
+
 df = get_data()
 
-st.subheader("Top 50 Coins - Realtime Signalen")
-df_display = df[["symbol", "lastPrice", "priceChangePercent", "volume"]].copy()
-df_display.columns = ["Coin", "Laatste Prijs", "Dagelijkse %", "Volume"]
-df_display["Dagelijkse %"] = df_display["Dagelijkse %"].round(2)
-df_display = df_display.sort_values("Dagelijkse %", ascending=False)
-st.dataframe(df_display, use_container_width=True)
+if df.empty:
+    st.warning("Geen data beschikbaar.")
+else:
+    # Sorteer BUY-signalen bovenaan (bijvoorbeeld op positief % change)
+    df = df.sort_values(by="Change %", ascending=False).reset_index(drop=True)
 
-selected_coin = st.selectbox("📊 Kies een coin voor live grafiek", df_display["Coin"])
+    st.subheader("Analyse & BUY-signalen")
+    st.dataframe(df, use_container_width=True)
 
-hist = get_historical(selected_coin)
+    # Grafiek tonen
+    st.subheader("📊 Grafiek eerste coin")
+    coin = df.iloc[0]['Coin'] if not df.empty else "BTCUSDT"
 
-fig = go.Figure()
-fig.add_trace(go.Scatter(x=hist["Time"], y=hist["Close"], mode="lines+markers", name=selected_coin))
-fig.update_layout(title=f"{selected_coin} - Laatste 30 min", xaxis_title="Tijd", yaxis_title="Prijs (USD)", height=400)
-st.plotly_chart(fig, use_container_width=True)
+    # Simpele grafiekdata ophalen
+    @st.cache_data(ttl=60)
+    def get_chart_data(symbol):
+        url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval=1m&limit=30"
+        response = requests.get(url)
+        if response.status_code != 200:
+            return []
+        return response.json()
 
-st.caption(f"Laatst vernieuwd: {datetime.now().strftime('%H:%M:%S')}")
+    chart_data = get_chart_data(coin)
+    if chart_data:
+        timestamps = [candle[0] for candle in chart_data]
+        prices = [float(candle[4]) for candle in chart_data]  # sluitprijs
+
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=timestamps, y=prices, mode='lines', name=coin))
+        fig.update_layout(title=f"Live prijsgrafiek van {coin}", xaxis_title="Tijd", yaxis_title="Prijs")
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("Geen grafiekdata beschikbaar voor deze coin.")
+
+st.caption("Laatste update: " + pd.Timestamp.now().strftime("%H:%M:%S"))
