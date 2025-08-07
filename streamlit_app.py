@@ -23,20 +23,17 @@ def get_data():
 
     top = []
     for d in data:
+        if not isinstance(d, dict):
+            continue
         symbol = d.get("symbol", "")
         if symbol.endswith("USDT") and not any(x in symbol for x in ["UP", "DOWN", "BULL", "BEAR"]):
-            try:
-                percent = float(d['priceChangePercent'])
-                top.append({
-                    "Coin": symbol,
-                    "Prijs": float(d['lastPrice']),
-                    "%": percent,
-                    "Vol": float(d['quoteVolume'])
-                })
-            except (KeyError, ValueError):
-                continue
-
-
+            percent = float(d['priceChangePercent'])
+            top.append({
+                "Coin": symbol,
+                "Prijs": float(d['lastPrice']),
+                "%": percent,
+                "Vol": float(d['quoteVolume'])
+            })
     df = pd.DataFrame(top)
     df = df.sort_values(by="Vol", ascending=False).head(50)
     df["Signaal"] = df["%"].apply(lambda x: "BUY" if x > 2 else ("SELL" if x < -2 else "NONE"))
@@ -105,26 +102,10 @@ with col3:
         st.success("Logboek gewist.")
 
 # -- LOG WEERGAVE
-st.subheader("📜 Logboek + Winst/Verlies")
+st.subheader("📜 Logboek")
 if os.path.exists(LOG_PATH):
     log_df = pd.read_csv(LOG_PATH, names=["Tijd", "Coin", "Actie", "Aantal"])
-    log_df = log_df.tail(20)
-    log_df["Prijs"] = log_df.apply(lambda row: df[df["Coin"] == row["Coin"]]["Prijs"].values[0] if row["Coin"] in df["Coin"].values else 0, axis=1)
-
-    winst = 0
-    positions = {}
-
-    for _, row in log_df.iterrows():
-        key = row["Coin"]
-        if row["Actie"] == "BUY":
-            positions[key] = positions.get(key, 0) + float(row["Aantal"])
-            winst -= float(row["Aantal"]) * row["Prijs"]
-        elif row["Actie"] == "SELL":
-            positions[key] = positions.get(key, 0) - float(row["Aantal"])
-            winst += float(row["Aantal"]) * row["Prijs"]
-
     st.dataframe(log_df[::-1], use_container_width=True)
-    st.markdown(f"**📊 Totaal virtueel resultaat:** {'✅' if winst >= 0 else '❌'} {winst:.2f} USD")
 else:
     st.info("Nog geen transacties geregistreerd.")
 
